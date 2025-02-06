@@ -50,14 +50,14 @@ void setup(){
 }
 
 void loop(){
-//  //data will be sent to server
-//  uint8_t buffer[50] = "hello world";
-//  //This initializes udp and transfer buffer
-//  udp.beginPacket(udpAddress, udpPort);
-//  udp.write(buffer, 11);
-//  udp.endPacket();
-//  memset(buffer, 0, 50);
-  uint8_t packet[50];
+  //data will be sent to server
+  uint8_t buffer[50] = "requesting message";
+  //This initializes udp and transfer buffer
+  udp.beginPacket(udpAddress, udpPort);
+  udp.write(buffer, 11);
+  udp.endPacket();
+  memset(buffer, 0, 50);
+  uint8_t packet[1024];
   //processing incoming packet, must be called before reading the buffer
   int packetSize = udp.parsePacket();
   if (packetSize) {
@@ -71,5 +71,8 @@ void loop(){
                     cmdmsg.steercmd); // access the data in the struct
     }
   }
-  
+  else{
+//    Serial.println("No Message received");
+  }
+  delay(10);
 }
