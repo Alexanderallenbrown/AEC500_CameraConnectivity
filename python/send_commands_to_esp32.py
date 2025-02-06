@@ -2,6 +2,7 @@ import socket
 import struct
 import time
 import random
+from math import sin
 # bind all IP
 HOST = '192.168.1.200'
 ESP = '192.168.1.202'
@@ -20,8 +21,8 @@ while True:
     # first is data
     #second is client address
     tnow = time.time()-starttime
-    gascmd = random.random()
-    steercmd = random.random()
+    gascmd = 90+30*sin(tnow)
+    steercmd = 90+30*sin(6*tnow)
 
     cmdmsg = struct.pack('fff',tnow,gascmd,steercmd)
     data = s.recvfrom(BUFFER_SIZE)
