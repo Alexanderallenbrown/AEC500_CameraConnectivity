@@ -16,14 +16,9 @@ starttime =time.time()
 # Bind the socket to the host and port
 s.bind((HOST, PORT))
 while True:
-    # Receive BUFFER_SIZE bytes data
-    # data is a list with 2 elements
-    # first is data
-    #second is client address
     tnow = time.time()-starttime
     gascmd = 90+30*sin(tnow)
     steercmd = 90+30*sin(6*tnow)
-
     cmdmsg = struct.pack('fff',tnow,gascmd,steercmd)
     data = s.recvfrom(BUFFER_SIZE)
     if data:
