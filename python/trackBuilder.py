@@ -4,7 +4,7 @@ from matplotlib.pyplot import *
 
 class Track:
 
-    def __init__(self,lengths,angles,dS=.1):
+    def __init__(self,lengths,angles,dS=.01):
         self.dS = dS
         self.Scoarse = array([0])
         self.Kcoarse = array([0])
