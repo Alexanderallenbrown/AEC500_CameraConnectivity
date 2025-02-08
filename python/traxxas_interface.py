@@ -52,7 +52,10 @@ yvec = []
 X = 0;
 Y = 0;
 Yaw = 0;
-
+Z=0;
+Roll=0;
+Pitch=0;
+gascmd,steercmd=0,0
 # feedbackvec2 = []
 #create axis object on the figure
 ax = fig.add_subplot(211)
@@ -63,7 +66,7 @@ xyline, = ax2.plot(xvec,yvec)
 # feedbackline2, = ax2.plot(tvec,commandvec2)
 #set labels
 ax.set_xlabel("time [s]")
-ax.set_ylabel("Yaw Rate (rad/s)")
+ax.set_ylabel("Yaw  (deg)")
 ax2.set_xlabel("X (m)")
 ax2.set_ylabel("Y (m)")
 
@@ -71,19 +74,27 @@ ax2.set_ylabel("Y (m)")
 ##################### NATNET STUFF
 
 def receive_new_frame(data_frame: DataFrame):
-    global num_frames,X,Y,Yaw
+    global num_frames,X,Y,Z,Roll,Pitch,Yaw,buffer_len,yawratevec,xvec,yvec
     # print(data_frame.read_from_buffer())
     # print(data_frame.rigid_bodies[0])
-    X = data_frame.rigid_bodies[0].pos[0]
-    Y = data_frame.rigid_bodies[0].pos[1]
-    quat = data_frame.rigid_bodies[0].rot
-    # Create a Rotation object from the quaternion
-    r = R.from_quat(quat)
-    # Convert to Euler angles (roll, pitch, yaw)
-    euler_angles = r.as_euler('xyz', degrees=True)
-    Yaw = euler_angles[2]
+    if(len(data_frame.rigid_bodies)>0):
+        X = data_frame.rigid_bodies[0].pos[0]
+        Y = data_frame.rigid_bodies[0].pos[1]
+        Z = data_frame.rigid_bodies[0].pos[2]
+
+
+        quat = data_frame.rigid_bodies[0].rot
+        # Create a Rotation object from the quaternion
+        r = R.from_quat(quat)
+        # Convert to Euler angles (roll, pitch, yaw)
+        euler_angles = r.as_euler('xyz', degrees=True)
+        Yaw = euler_angles[2]
+        Roll = euler_angles[0]
+        Pitch = euler_angles[1]
+
     # print(euler_angles)
-    print("x: "+str(x)+", y: "+str(y)+", rpy: "+str(euler_angles))
+    # print("x: "+str(X)+", y: "+str(Y)+", yaw: "+str(Yaw))
+    # print("len: "+str(len(xvec)))
     # print((DataFrame.read_from_buffer()))
 
 
@@ -128,11 +139,12 @@ def startCommThread():
     plotthread = Thread(target=doPlot)
     plotthread.start()
     natnetthread = Thread(target=doNatNet)
+    natnetthread.start()
 
 
-def cleanupServoThread():
-    global endSerialThread,endPlotThread,endNatNetThread
-    endSerialThread=True
+def cleanupCommThread():
+    global endCommThread,endPlotThread,endNatNetThread
+    endCommThread=True
     endPlotThread = True
     endNatNetThread = True
 
@@ -145,10 +157,11 @@ def doNatNet():
 
     with streaming_client:
         streaming_client.request_modeldef()
-
+        # print("with streaming client")
         while not endNatNetThread:
             time.sleep(.01)
             streaming_client.update_sync()
+            # print("updating streaming client sync")
 
 def doPlot():
     global tvec,yawrateline,xline,yline,canvas,endPlotThread,endCommThread
@@ -158,10 +171,11 @@ def doPlot():
     while not endCommThread:
         yawrateline.set_data(tvec, yawratevec)
         xyline.set_data(xvec, yvec)
-        feedbackline2.set_data(tvec,feedbackvec2)
+        # print("len: "+str(len(xvec)))
+        # yawrateline2.set_data(tvec,feedbackvec2)
         if(len(tvec)>3):
             ax.set_xlim([tvec[0],tvec[-1]])
-            ax.set_ylim([-20,20])
+            ax.set_ylim([-190,190])
             # ax.legend(['roll desired','roll'])
             ax2.set_xlim([-10,10])
             ax2.set_ylim([-10,10])
@@ -175,7 +189,7 @@ def doPlot():
 
 ############## Function to communicate with Arduino ###########
 def doComm():
-    global X,Y,Yaw,sock,endSerialThread,tvec,xvec,yvec,yawratevec,file,fname,gascmd,steercmd
+    global X,Y,Z,Roll,Pitch,Yaw,sock,endSerialThread,tvec,xvec,yvec,yawratevec,file,fname,gascmd,steercmd
     #initialize old time
     arduino_delay = .01
     timestr = time.strftime("%Y%m%d-%H%M%S")
@@ -191,9 +205,9 @@ def doComm():
         #globals for commands are handled in slider callbacks.
         #pack them and send them if data have been requested by ESP32
         cmdmsg = struct.pack('fff',tnow,gascmd,steercmd)
-        data = s.recvfrom(BUFFER_SIZE)
+        data = sock.recvfrom(BUFFER_SIZE)
         #write data to our file
-        f.write(f"{tnow:.2f},{steercmd:.2f},{gascmd:.2f},{X:.3f},{Y:.3f},{Yaw:.3f}\r\n")
+        f.write(f"{tnow:.2f},{steercmd:.2f},{gascmd:.2f},{X:.3f},{Y:.3f},{Z:.3f},{Roll:.3f},{Pitch:.3f},{Yaw:.3f}\r\n")
         if data:
             statemsg["text"]="Connected"
             #print received data
@@ -201,10 +215,31 @@ def doComm():
             sock.sendto(cmdmsg,data[1])
             # time.sleep(0.1)
             # print("Sending: ",cmdmsg)
+        print("X,Y,Yaw: ",X,Y,Yaw)
+        if(len(xvec)<buffer_len):
+            xvec.append(X)
+        else:
+            xvec = xvec[1:]
+            xvec.append(X)
+        if(len(yvec)<buffer_len):
+            yvec.append(Y)
+        else:
+            yvec = yvec[1:]
+            yvec.append(Y)
+        if(len(yawratevec)<buffer_len):
+            yawratevec.append(Yaw)
+        else:
+            yawratevrec = yawratevec[1:]
+            yawratevec.append(Yaw)
+        if(len(tvec)<buffer_len):
+            tvec.append(tnow)
+        else:
+            tvec.pop()
+            tvec.append(tnow)
         time.sleep(arduino_delay)
         # print(cmd)
         # time.sleep(0.1)
-    ser.close()
+    sock.close()
     f.close()
     statemsg["text"] = "Not Connected"
 
@@ -247,12 +282,12 @@ statemsg.pack()
 servobut = tk.Button(
     portframe,
     text="Connect",
-    command=startServoThread)
+    command=startCommThread)
 servobut.pack(side=tk.RIGHT)
 killbut = tk.Button(
     portframe,
     text="Disconnect",
-    command=cleanupServoThread)
+    command=cleanupCommThread)
 killbut.pack(side=tk.RIGHT)
 
 
@@ -261,17 +296,19 @@ killbut.pack(side=tk.RIGHT)
 #create a slider for roll
 steercmdframe = tk.Frame(window,relief=tk.GROOVE,borderwidth=3)
 steercmdframe.pack()
-steercmdlabel = tk.Label(steercmdframe,text="Steer Command (deg)")
+steercmdlabel = tk.Label(steercmdframe,text="Drive Command (deg)")
 steercmdlabel.pack(side=tk.LEFT)
-steercmdslider = tk.Scale(steercmdframe,orient=tk.HORIZONTAL,from_=-1,to=1,resolution=1,command=steercmdcallback,length=400)
+steercmdslider = tk.Scale(steercmdframe,orient=tk.HORIZONTAL,from_=0,to=180,resolution=1,command=steercmdcallback,length=400)
 steercmdslider.pack(side=tk.RIGHT)
+steercmdslider.set(90)
 
 drivecmdframe = tk.Frame(window,relief=tk.GROOVE,borderwidth=3)
 drivecmdframe.pack()
-drivecmdlabel = tk.Label(drivecmdframe,text="Drive Command")
+drivecmdlabel = tk.Label(drivecmdframe,text="Steer Command")
 drivecmdlabel.pack(side=tk.LEFT)
 drivecmdslider = tk.Scale(drivecmdframe,orient=tk.HORIZONTAL,from_=0,to=180,resolution=1,command=drivecmdcallback,length=400)
 drivecmdslider.pack(side=tk.RIGHT)
+drivecmdslider.set(90)
 
 #create a status message in this frame to show serial port status
 echomsg = tk.Label(window,text="No Data Received")
