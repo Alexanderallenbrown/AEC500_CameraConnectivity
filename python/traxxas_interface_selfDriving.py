@@ -52,9 +52,20 @@ Ugoal = 0.1 #goal speed for track
 kp_U = 10 #gain for speed
 ki_U = 30
 intE_U = 0
+U= 0
+Xold = 0
+Yold = 0
 yawcor = Rollover()#for storing yaw
+lastFrameTime = time.time()
+class runningMedian:
+    def __init__(self,n=13):
+        self.vec = np.zeros(n)
+    def update(self,xnew):
+        self.vec = np.append(self.vec,xnew)
+        self.vec = self.vec[1:]
+        return np.median(self.vec)
 
-
+Umed = runningMedian()
 
 
 ################ globals for UDP with ESP32
@@ -112,13 +123,23 @@ ax2.set_ylabel("Y (m)")
 ##################### NATNET STUFF
 
 def receive_new_frame(data_frame: DataFrame):
-    global num_frames,X,Y,Z,Roll,Pitch,Yaw,buffer_len,yawratevec,xvec,yvec
+    global yawcor, lastFrameTime, Umed, U, Xold, Yold num_frames,X,Y,Z,Roll,Pitch,Yaw,buffer_len,yawratevec,xvec,yvec
     # print(data_frame.read_from_buffer())
     # print(data_frame.rigid_bodies[0])
     if(len(data_frame.rigid_bodies)>0):
         X = data_frame.rigid_bodies[0].pos[0]
         Y = data_frame.rigid_bodies[0].pos[1]
         Z = data_frame.rigid_bodies[0].pos[2]
+
+        dX = (X - Xold)
+        dY = (Y - Yold)
+        dS = sqrt(dX**2+dY**2)
+        U_un = dS/(time.time()-lastFrameTime)
+        U = Umed.update(U_un)
+        lastFrameTime = time.time()
+        Xold = X
+        Yold = Y
+        Zold = Z
 
 
         quat = data_frame.rigid_bodies[0].rot
@@ -129,6 +150,7 @@ def receive_new_frame(data_frame: DataFrame):
         Yaw = euler_angles[2] - 90
         Roll = euler_angles[0]
         Pitch = euler_angles[1]
+        yawcor.update(Yaw*pi/180)#corrected yaw
 
     # print(euler_angles)
     # print("x: "+str(X)+", y: "+str(Y)+", yaw: "+str(Yaw))
@@ -267,10 +289,10 @@ def doComm():
             yvec = yvec[1:]
             yvec.append(Y)#yvec.append(Y)
         if(len(yawratevec)<buffer_len):
-            yawratevec.append(Yaw)
+            yawratevec.append(yawcor.ang*180/pi)
         else:
             yawratevec = yawratevec[1:]
-            yawratevec.append(Yaw)
+            yawratevec.append(yawcor.ang*180/pi)
         if(len(tvec)<buffer_len):
             tvec.append(tnow)
         else:
