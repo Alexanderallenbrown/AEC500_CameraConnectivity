@@ -11,7 +11,7 @@ Servo steerservo;  // create servo object to control a servo
 // Possible PWM GPIO pins on the ESP32-S3: 0(used by on-board button),1-21,35-45,47,48(used by on-board LED)
 // Possible PWM GPIO pins on the ESP32-C3: 0(used by on-board button),1-7,8(used by on-board LED),9-10,18-21
 int drivePin = 13;
-int steerPin = 25;
+int steerPin = 12;
 int steerVal = 90;
 int driveVal = 90;
 /*
